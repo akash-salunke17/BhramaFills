@@ -1,5 +1,31 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { projectService } from "../../../services/projectService";
 import { researchService } from "../services/researchService";
+import { authService } from "../../../services/authService";
+
+function computeStats(list) {
+  const stats = {
+    total: list.length,
+    draft: 0,
+    inProgress: 0,
+    completed: 0,
+    archived: 0,
+    byCategory: {},
+  };
+
+  list.forEach((item) => {
+    if (item.status === "Draft") stats.draft += 1;
+    else if (item.status === "In Progress") stats.inProgress += 1;
+    else if (item.status === "Completed") stats.completed += 1;
+    else if (item.status === "Archived") stats.archived += 1;
+
+    if (item.category) {
+      stats.byCategory[item.category] = (stats.byCategory[item.category] || 0) + 1;
+    }
+  });
+
+  return stats;
+}
 
 export function useResearchProjects() {
   const [allProjects, setAllProjects] = useState([]);
@@ -22,10 +48,8 @@ export function useResearchProjects() {
 
   const fetchProjects = useCallback(async () => {
     try {
-      const [list, computedStats] = await Promise.all([
-        researchService.getAllProjects(),
-        researchService.getProjectStats(),
-      ]);
+      const list = await projectService.getAllProjects();
+      const computedStats = computeStats(list);
       setAllProjects(list);
       setStats(computedStats);
       setError(null);
@@ -42,10 +66,8 @@ export function useResearchProjects() {
 
     async function initialFetch() {
       try {
-        const [list, computedStats] = await Promise.all([
-          researchService.getAllProjects(),
-          researchService.getProjectStats(),
-        ]);
+        const list = await projectService.getAllProjects();
+        const computedStats = computeStats(list);
         if (!ignore) {
           setAllProjects(list);
           setStats(computedStats);
@@ -63,13 +85,18 @@ export function useResearchProjects() {
 
     initialFetch();
 
-    const unsubscribe = researchService.subscribe(() => {
+    const unsubStorage = researchService.subscribe(() => {
+      initialFetch();
+    });
+
+    const unsubAuth = authService.subscribe(() => {
       initialFetch();
     });
 
     return () => {
       ignore = true;
-      unsubscribe();
+      unsubStorage();
+      unsubAuth();
     };
   }, []);
 
@@ -122,7 +149,7 @@ export function useResearchProjects() {
   const createProject = useCallback(async (data) => {
     setError(null);
     try {
-      const created = await researchService.createProject(data);
+      const created = await projectService.createProject(data);
       await fetchProjects();
       return created;
     } catch (err) {
@@ -134,7 +161,7 @@ export function useResearchProjects() {
   const updateProject = useCallback(async (id, data) => {
     setError(null);
     try {
-      const updated = await researchService.updateProject(id, data);
+      const updated = await projectService.updateProject(id, data);
       await fetchProjects();
       return updated;
     } catch (err) {
@@ -146,7 +173,7 @@ export function useResearchProjects() {
   const deleteProject = useCallback(async (id) => {
     setError(null);
     try {
-      const success = await researchService.deleteProject(id);
+      const success = await projectService.deleteProject(id);
       await fetchProjects();
       return success;
     } catch (err) {

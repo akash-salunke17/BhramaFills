@@ -12,14 +12,58 @@ To accomplish its mission of comparative gap detection, Bharmafills integrates f
 
 | Integration | Technology | Primary Function | Target Phase | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| **AI Synthesis Engine** | **Google Gemini API** | Comparative gap analysis, contradiction detection, checklist generation | Phase 4 | `PLANNED` |
-| **Cloud Database & Auth** | **Supabase** | PostgreSQL 15, user authentication, RLS, and binary document storage | Phase 4 | `PLANNED` |
-| **Web Content Ingestion** | **BeautifulSoup4 + HTTPX** | HTML scraping, DOM sanitization, semantic text extraction | Phase 3 | `PLANNED` |
-| **PDF Document Parser** | **PyMuPDF (`fitz`)** | Local text and layout parsing with page-level citation metadata | Phase 3 | `PLANNED` |
+| **AI Provider Foundation** | **OpenRouter API + NVIDIA Nemotron** | Asynchronous completions, LLM abstraction, resilient retries | Step 9A | `IMPLEMENTED & TESTED` |
+| **Cloud Database & Auth** | **Supabase PostgreSQL** | PostgreSQL 17, RLS, Session Pooler, asyncpg | Step 6 | `IMPLEMENTED & TESTED` |
+| **Web Content Ingestion** | **BeautifulSoup4 + HTTPX** | HTML scraping, DNS pinning, SSRF defense, clean text | Step 7 | `IMPLEMENTED & TESTED` |
+| **PDF Document Parser** | **PyMuPDF (`fitz`)** | In-memory text/layout parsing, page-level citation metadata | Step 8 | `IMPLEMENTED & TESTED` |
+| **Future AI Synthesis** | **Google Gemini API** | Alternative multi-modal engine & context caching | Step 9B+ | `PLANNED` |
 
 ---
 
-## 2. Google Gemini API Integration
+## 2. OpenRouter API Integration (Step 9A Implemented Baseline)
+
+### 2.1 Technical Specifications & Model Governance
+- **API Endpoint**: `https://openrouter.ai/api/v1`
+- **Active Model Target**: `nvidia/nemotron-3-ultra-550b-a55b:free`
+- **Configurable Architecture**: The active model identifier is runtime-configurable via `OPENROUTER_MODEL` in `backend/.env`.
+- **Client Implementation**: `OpenRouterClient` in `backend/app/services/ai/openrouter_client.py` using asynchronous `httpx.AsyncClient`.
+- **Reusable Connection Pool**: Shares a single persistent HTTP client across requests and safely releases resources during FastAPI lifespan shutdown (`await ai_provider.close()`).
+- **Bounded Resilience**: Automatically retries transient 429, 502, 503, and timeout errors up to 2 times with exponential backoff. Non-transient errors (401 Unauthorized, 402 Quota Exceeded, 422 Content Policy) fail immediately.
+
+### 2.2 Critical Privacy & Security Notice (Free Tier Policy)
+- The active model `nvidia/nemotron-3-ultra-550b-a55b:free` operates under a public free tier with explicit privacy guidelines against transmitting confidential or personally identifiable data (PII).
+- **Enforced Boundary in Step 9A**:
+  - ZERO scraped website content or uploaded PDF text is transmitted to OpenRouter in this stage.
+  - No automated document-processing triggers exist.
+  - Automated test suites strictly mock all HTTP interactions with `AsyncMock(spec=httpx.AsyncClient)`. Zero API calls or token usage occur during automated CI/CD runs.
+
+### 2.3 Structured Output Safety & SafeResponseParser
+- Because Nemotron 3 Ultra does not provide hardware-enforced `response_format` JSON schema mode:
+  - Text completions are parsed using `SafeResponseParser` (`backend/app/services/ai/parser.py`).
+  - It strips markdown code fences (` ```json `), scans for balanced bracket candidates, and validates against strict Pydantic target schemas.
+  - Unparseable or malformed responses produce an explicit `StructuredExtractionResult(is_valid=False)` with descriptive errors.
+  - Structural validation only: The parser validates that the response conforms to the target Pydantic schema (structure and type checking). It does NOT verify factual accuracy, citations, or quotations in the model output. Factual verification is a planned future stage (Step 9B+).
+
+### 2.4 Prompt Security Architecture & PromptBuilder (Steps 9B.1, 9B.1.1 & 9B.1.2)
+- **Centralized Prompt Architecture (`backend/app/services/ai/prompts/`)**:
+  - `SECURITY_SYSTEM_PROMPT` (`templates.py`): Immutable system prompt articulating the 4-tier trust hierarchy (TRUSTED System, TRUSTED Task, UNTRUSTED Sources, UNVERIFIED Output). Acknowledges the probabilistic boundary limitation of unified model attention, and establishes behavioral constraints (forbids instruction following from sources, credential disclosure, and fact fabrication).
+  - `SourceDocument` (`builder.py`): Frozen dataclass encapsulating untrusted sources with attribute safety checks (rejecting XML delimiters in IDs) and type normalization (`web`, `pdf`, `url` -> `web`).
+  - `PromptBuilder` (`builder.py`): Pure functional prompt assembler.
+    - Strips XML tags, comments, CDATA, and processing instructions from untrusted text before fencing to mitigate delimiter collision and injection risks.
+    - Wraps individual sources in `<untrusted_source_document id="..." type="..." index="N" truncated="true/false">`.
+    - Explicit truncation transparency: when source text exceeds `MAX_SOURCE_CHARS=40_000`, the tag reports `truncated="true" omitted_chars="N"` and appends a visible notice.
+    - Explicit source capping transparency: when source count exceeds `MAX_SOURCES_PER_PROMPT=20`, an explicit `<sources_truncation_notice>` tag is inserted into `<untrusted_sources>`.
+    - **Structured Truncation & Omission Metadata Contract (`PromptBuildResult`) (Step 9B.1.2)**:
+      - `PromptBuilder.build()` and `build_system_only()` return `PromptBuildResult(messages, source_metadata, source_summary)`.
+      - `SourceTruncationMetadata`: Tracks per-source character counts (`source_id`, `source_type`, `was_truncated`, `original_char_count`, `retained_char_count`, `omitted_char_count`).
+      - `SourceOmissionSummary`: Tracks overall source counts (`total_sources_provided`, `total_sources_included`, `total_sources_omitted`, `omitted_source_ids`).
+      - Implements sequence behavior (`__iter__`, `__getitem__`, `__len__`) so callers can unpack (`sys, user = result`) or pass directly to AI providers without breakage.
+      - Downstream callers (Step 9B.2+) receive programmatic auditability without needing to inspect XML strings.
+  - **Security Realism**: Prompt fencing and tag stripping structure context and reduce delimiter risks, but do not provide complete immunity against all semantic manipulation. Defense-in-depth requires downstream schema validation (`SafeResponseParser`).
+
+---
+
+## 3. Google Gemini API Integration (Alternative / Planned)
 
 ### 2.1 Technical Specifications & Model Governance
 - **SDK**: `google-genai` (Official Google GenAI Python SDK).

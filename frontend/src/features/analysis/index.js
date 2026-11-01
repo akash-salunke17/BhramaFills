@@ -1,0 +1,10 @@
+export { default as GapAnalysisPanel } from "./components/GapAnalysisPanel";
+export { default as GapCard } from "./components/GapCard";
+export { default as GapFilters } from "./components/GapFilters";
+export { default as GapAnalysisSummary } from "./components/GapAnalysisSummary";
+export { default as GapEvidenceViewer } from "./components/GapEvidenceViewer";
+export { default as GapReviewDialog } from "./components/GapReviewDialog";
+export { default as GapEmptyState } from "./components/GapEmptyState";
+export { default as GapAnalysisSkeleton } from "./components/GapAnalysisSkeleton";
+export { useGapAnalysis } from "./hooks/useGapAnalysis";
+export { gapService } from "./services/gapService";

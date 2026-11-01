@@ -115,6 +115,7 @@ Active baseline dependencies:
 - `pydantic` (2.14.2)
 - `pydantic-settings` (2.16.2)
 - `httpx` (0.28.1)
+- `asyncpg` (0.32.0)
 - `pytest` (8.4.2) & `pytest-asyncio` (0.26.0)
 
 ### 3.3 Running FastAPI Locally
@@ -125,7 +126,7 @@ python -m uvicorn app.main:app --reload --port 8000
 
 Verify in another PowerShell tab:
 ```powershell
-# Probe the health endpoint
+# Probe the process health endpoint
 Invoke-RestMethod -Uri http://127.0.0.1:8000/api/v1/health
 ```
 Output:
@@ -137,13 +138,33 @@ Output:
 }
 ```
 
+Verify database connectivity:
+```powershell
+# Probe the database health endpoint
+Invoke-RestMethod -Uri http://127.0.0.1:8000/api/v1/health/database
+```
+Output (when configured and connected):
+```json
+{
+  "status": "ok",
+  "database": "connected"
+}
+```
+Output (when not configured):
+```json
+{
+  "status": "not_configured",
+  "database": "not_configured"
+}
+```
+
 Swagger UI documentation is accessible at: `http://localhost:8000/docs`
 
 ### 3.4 Executing Backend Tests
 ```powershell
 python -m pytest
 ```
-Output should confirm 23 passing tests across `test_health.py`, `test_app.py`, `test_cors.py`, and `test_config.py`.
+Output should confirm 42 passing tests across configuration, CORS, health probes, and database connection lifecycle test suites.
 
 ---
 
@@ -159,8 +180,28 @@ Reference template located in `.env.example`:
 | `SUPABASE_URL` | Step 6+ | `https://xyzcompany.supabase.co` | Supabase project instance endpoint |
 | `SUPABASE_ANON_KEY` | Step 6+ | `eyJhbGci...` | Supabase public client anonymous token |
 | `SUPABASE_SERVICE_ROLE_KEY` | Step 6+ | `eyJhbGci...` | Supabase private service key (backend only) |
+| `SUPABASE_DB_URL` | Step 6A+ | `postgresql://placeholder:placeholder@placeholder:5432/postgres` | Supabase PostgreSQL Session Pooler connection URL (Backend only) |
 | `GEMINI_API_KEY` | Step 9+ | `AIzaSy...` | Google Gemini API key for gap analysis |
 | `GEMINI_MODEL` | Step 9+ | `gemini-2.5-flash` | Configurable model identifier |
+| `OPENROUTER_API_KEY` | Step 9A+ | `sk-or-v1-...` | OpenRouter API key for LLM chat completions (NVIDIA Nemotron 3 Ultra) |
+| `OPENROUTER_MODEL` | Step 9A+ | `nvidia/nemotron-3-ultra-550b-a55b:free` | Runtime-configurable OpenRouter model identifier |
+| `OPENROUTER_BASE_URL` | Step 9A+ | `https://openrouter.ai/api/v1` | OpenRouter API base endpoint URL |
+| `OPENROUTER_TIMEOUT_SECONDS` | Step 9A+ | `30.0` | Timeout in seconds for OpenRouter API requests |
+
+---
+
+### Optional: Verify Live OpenRouter Connectivity
+
+After setting `OPENROUTER_API_KEY` in `backend/.env`, you can manually verify the connection with the provided smoke test script:
+
+```powershell
+# Run from workspace root — NEVER executed automatically
+.\backend\venv\Scripts\python.exe backend\scripts\smoke_test_openrouter.py
+```
+
+> **Important**: This script is NEVER auto-run by pytest, CI, or application startup.
+> It sends only the fixed harmless message `"Reply with the single word OK."` and never transmits real project data.
+> It never prints or logs the API key or any credential-derived information.
 
 ---
 
@@ -180,3 +221,10 @@ Reference template located in `.env.example`:
 ### Issue 3: LocalStorage Quota Exceeded in Private Browsing
 - **Cause**: Browsers in strict private mode impose strict quota limitations.
 - **Behavior**: Bharmafills gracefully falls back to session memory and alerts the user with an inline notice rather than crashing.
+
+### Issue 4: Supabase Connection String contains `[YOUR-PASSWORD]` or Special Characters
+- **Cause**: Copying the Session Pooler connection string directly from the Supabase dashboard preserves the `[YOUR-PASSWORD]` template placeholder.
+- **Fix**:
+  1. Replace the entire `[YOUR-PASSWORD]` token (including the square brackets `[` and `]`) with your database password.
+  2. If your password contains special characters like `@`, `:`, `#`, `%`, `&`, or `?`, URL-encode them (e.g., using Python `urllib.parse.quote_plus("your@pass")` -> `your%40pass`).
+  3. Ensure the connection string uses port `5432` for Session Pooler mode with `statement_cache_size=0`.

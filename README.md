@@ -45,7 +45,8 @@ The repository maintains an authoritative, synchronized documentation suite:
 | **Step 3** | **Research Project Management** | `COMPLETED` | 52 passing Vitest unit tests, clean ESLint, zero build errors |
 | **Step 4** | **Documentation Foundation** | `COMPLETED` | 16 canonical specifications, threat models, API and database contracts |
 | **Step 5** | **FastAPI Foundation** | `COMPLETED` (5A) | 23 passing Pytest tests, modular app scaffold, CORS, truthful health probe |
-| **Step 6** | **Supabase Connection** | `PLANNED` *(Next)* | PostgreSQL 15, RLS policies, client sync migration adapter |
+| **Step 6A** | **Supabase Connection Foundation** | `COMPLETED` (6A) | 42 passing Pytest tests, asyncpg Session Pooler connection manager, `/health/database` probe |
+| **Step 6B** | **Supabase Schema & RLS** | `PLANNED` *(Next)* | PostgreSQL schema migrations, RLS policies, client sync adapter |
 | **Step 7** | **URL Extraction** | `PLANNED` | BeautifulSoup4 scraping, SSRF & DNS rebinding defense |
 | **Step 8** | **PDF Extraction** | `PLANNED` | PyMuPDF parsing, page citation indexing, 20MB file cap |
 | **Step 9** | **AI Extraction & Prompt Fencing** | `PLANNED` | Configurable Gemini model, XML untrusted prompt fencing |
@@ -100,7 +101,7 @@ cd backend
 # 3. Start development server
 python -m uvicorn app.main:app --reload --port 8000
 
-# 4. Run automated test suite (23 tests)
+# 4. Run automated test suite (171 tests)
 python -m pytest
 ```
 
@@ -110,7 +111,8 @@ python -m pytest
 
 - **Frontend**: React 19, Vite 8, Tailwind CSS v4, Base UI, Nova design tokens, `@fontsource-variable/geist`, `lucide-react`.
 - **Frontend Testing**: Vitest 5, React Testing Library, `@testing-library/jest-dom`, JSDOM (52 tests passing).
-- **Backend**: Python 3.15, FastAPI, Uvicorn, HTTPX, Pydantic v2 & Pydantic Settings (23 tests passing).
-- **Extraction (Planned)**: BeautifulSoup4, lxml, PyMuPDF (`fitz`).
-- **Database & Auth (Planned)**: Supabase PostgreSQL 15+, Row Level Security (RLS).
-- **AI Engine (Planned)**: Google Gemini API (Configurable model / Structured JSON).
+- **Backend**: Python 3.15, FastAPI, Uvicorn, HTTPX, asyncpg, Pydantic v2 & Pydantic Settings (171 tests passing across 15 suites).
+- **Web Extraction Engine**: BeautifulSoup4, lxml, socket-level DNS pinning, strict SSRF defense (Step 7A/7B implemented & verified).
+- **PDF Extraction Engine**: PyMuPDF (`fitz`), memory stream processing, page chunking, metadata extraction (Step 8 implemented & verified).
+- **Database & Auth**: Supabase PostgreSQL 17 via Session Pooler, Row Level Security (RLS) on all domain tables (Step 6A/6B implemented & live-verified).
+- **AI Synthesis Engine**: OpenRouter API (`nvidia/nemotron-3-ultra-550b-a55b:free`), HTTPX async client, SafeResponseParser (Step 9A implemented & verified).

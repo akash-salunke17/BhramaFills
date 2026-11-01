@@ -44,6 +44,9 @@ def test_docs_disabled_in_production() -> None:
         ENVIRONMENT="production",
         PROJECT_NAME="Bharmafills API (Prod)",
         VERSION="0.1.0",
+        SUPABASE_DB_URL=None,
+        OPENROUTER_API_KEY=None,
+        _env_file=None,
     )
     prod_app = create_app(settings=prod_settings)
     with TestClient(prod_app) as prod_client:
